@@ -14,6 +14,9 @@
 #include <blob/ComponentLabeling.h>
 #include <blob/BlobProperties.h>
 
+using namespace cv;
+using namespace std;
+
 QString fn_video;
 
 MyWindow::MyWindow(QWidget *parent) :
@@ -371,7 +374,7 @@ void MyWindow::on_openCamera_clicked()
 
         std::cout <<"Opening : " << fn_video.toUtf8().constData() << std::endl;
 
-        if(cam.open(fn_video.toUtf8().constData())){
+        if(cam.open("/home/sumit/Downloads/3.mp4")){
             camera_opend = true;
             source_from_log = true;
             ui->openCamera->setEnabled(false);
@@ -737,6 +740,10 @@ void MyWindow::on_updateImages()
 
         }
 
+        Mat hist_Image = camImage.clone();
+        cv::resize(hist_Image, hist_Image, cv::Size(320,240));
+        cv::cvtColor(hist_Image,hist_Image,CV_BGR2RGB);
+
         cv::resize(camImage,colorImage,cv::Size(320,240));
         cv::cvtColor(colorImage,thImage,CV_RGB2HSV_FULL);
 
@@ -886,6 +893,23 @@ void MyWindow::on_updateImages()
 
         }
 
+        STRETCHED = 1;
+        ORIGINAL = 0;
+
+        Display_Histogram_Image(ORIGINAL,hist_Image);
+
+        if(histogram_stretch_enable)
+        {
+            Stretch_Histogram(hist_Image);
+        }
+
+        if(histogram_equalizer_enable)
+        {
+            Equalize_Histogram(hist_Image);
+        }
+
+        Display_Histogram_Image(STRETCHED,hist_Image);
+
         displayImages();
     }
 }
@@ -923,4 +947,137 @@ void MyWindow::closeEvent(QCloseEvent *)
     else
     {
     }
+}
+
+void MyWindow::Display_Histogram_Image(int flag,cv::Mat& img)
+{
+
+    try
+    {
+        Mat src = img.clone();
+
+
+
+        if(!src.data)
+            cout<<"error\n\n";
+
+        /// Separate the image in 3 places ( B, G and R )
+        vector<Mat> bgr_planes;
+        split( src, bgr_planes );
+
+        /// Establish the number of bins
+        int histSize = 256;
+
+        /// Set the ranges ( for B,G,R) )
+        float range[] = { 0, 256 } ;
+        const float* histRange = { range };
+
+        bool uniform = true; bool accumulate = false;
+
+        Mat b_hist, g_hist, r_hist;
+
+        /// Compute the histograms:
+        calcHist( &bgr_planes[0], 1, 0, Mat(), b_hist, 1, &histSize, &histRange, uniform, accumulate );
+        calcHist( &bgr_planes[1], 1, 0, Mat(), g_hist, 1, &histSize, &histRange, uniform, accumulate );
+        calcHist( &bgr_planes[2], 1, 0, Mat(), r_hist, 1, &histSize, &histRange, uniform, accumulate );
+
+        // Draw the histograms for B, G and R
+        int hist_w = 512; int hist_h = 400;
+        int bin_w = cvRound( (double) hist_w/histSize );
+
+        Mat histImage( hist_h, hist_w, CV_8UC3, Scalar( 0,0,0) );
+
+        /// Normalize the result to [ 0, histImage.rows ]
+        normalize(b_hist, b_hist, 0, histImage.rows, NORM_MINMAX, -1, Mat() );
+        normalize(g_hist, g_hist, 0, histImage.rows, NORM_MINMAX, -1, Mat() );
+        normalize(r_hist, r_hist, 0, histImage.rows, NORM_MINMAX, -1, Mat() );
+
+        /// Draw for each channel
+        for( int i = 1; i < histSize; i++ )
+        {
+            line( histImage, Point( bin_w*(i-1), hist_h - cvRound(b_hist.at<float>(i-1)) ) ,
+                             Point( bin_w*(i), hist_h - cvRound(b_hist.at<float>(i)) ),
+                             Scalar( 255, 0, 0), 2, 8, 0  );
+            line( histImage, Point( bin_w*(i-1), hist_h - cvRound(g_hist.at<float>(i-1)) ) ,
+                             Point( bin_w*(i), hist_h - cvRound(g_hist.at<float>(i)) ),
+                             Scalar( 0, 255, 0), 2, 8, 0  );
+            line( histImage, Point( bin_w*(i-1), hist_h - cvRound(r_hist.at<float>(i-1)) ) ,
+                             Point( bin_w*(i), hist_h - cvRound(r_hist.at<float>(i)) ),
+                             Scalar( 0, 0, 255), 2, 8, 0  );
+        }
+
+        cv::resize(histImage, histImage, cv::Size(320,240));
+
+        if(flag == STRETCHED)
+        {
+            QImage display1((uchar *)histImage.data,histImage.cols,
+                        histImage.rows,QImage::Format_RGB888);
+            ui->HistogramStretched->setPixmap(QPixmap::fromImage(display1));
+
+            QImage display2((uchar *)img.data,img.cols,
+                        img.rows,QImage::Format_RGB888);
+            ui->HistogramStretchedImage->setPixmap(QPixmap::fromImage(display2));
+        }
+        else if(flag == ORIGINAL)
+        {
+            QImage display1((uchar *)histImage.data,histImage.cols,
+                        histImage.rows,QImage::Format_RGB888);
+            ui->HistogramOriginal->setPixmap(QPixmap::fromImage(display1));
+        }
+    }
+    catch(const exception &ex)
+    {
+        cerr<<ex.what();
+    }
+}
+
+void MyWindow::Stretch_Histogram(cv::Mat &hist_Image)
+{
+    try
+    {
+        Mat HSV;
+        vector<Mat> channels;
+        vector<Mat> hsv_planes;
+
+        split(hist_Image,channels);
+        normalize(channels[0], channels[0], 0, 255, NORM_MINMAX);
+        normalize(channels[1], channels[1], 0, 255, NORM_MINMAX);
+        normalize(channels[2], channels[2], 0, 255, NORM_MINMAX);
+        merge(channels,hist_Image);
+
+        cvtColor(hist_Image,HSV,COLOR_BGR2HSV);
+        hsv_planes.clear();
+        split(HSV,hsv_planes);
+        normalize(hsv_planes[1], hsv_planes[1], 0, 255, NORM_MINMAX);
+        normalize(hsv_planes[2], hsv_planes[2], 0, 255, NORM_MINMAX);
+        merge(hsv_planes,HSV);
+        cvtColor(HSV,hist_Image,COLOR_HSV2BGR);
+    }
+    catch(const exception &ex)
+    {
+        cerr<<ex.what();
+    }
+}
+
+void MyWindow::Equalize_Histogram(cv::Mat &hist_Image)
+{
+    vector<Mat> channels;
+
+    cvtColor(hist_Image, hist_Image, CV_BGR2YCrCb);
+    split(hist_Image, channels);
+
+    equalizeHist(channels[0], channels[0]);
+
+    merge(channels,hist_Image);
+    cvtColor(hist_Image, hist_Image, CV_YCrCb2BGR);
+}
+
+void MyWindow::on_EqualizerCheck_clicked()
+{
+    histogram_equalizer_enable = !histogram_equalizer_enable;
+}
+
+void MyWindow::on_StretchCheck_clicked()
+{
+     histogram_stretch_enable = !histogram_stretch_enable;
 }

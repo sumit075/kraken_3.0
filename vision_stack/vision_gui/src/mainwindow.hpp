@@ -17,6 +17,7 @@
 #include <opencv/cv.h>
 #include <opencv/cxcore.h>
 #include <opencv/highgui.h>
+#include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/core/mat.hpp>
 #include <fstream>
 #include <iostream>
@@ -115,6 +116,13 @@ public Q_SLOTS:
     // manual callbacks
     void on_updateImages();
     //i->colorImage->mouseDoubleClickEvent();
+
+    void on_EqualizerCheck_clicked();
+    void on_StretchCheck_clicked();
+    void Display_Histogram_Image(int flag,cv::Mat &img);
+    void Stretch_Histogram(cv::Mat &img);
+    void Equalize_Histogram(cv::Mat &img);
+
 private:
     Ui::MainWindow *ui;
     bool camera_opend,video_being_processed;
@@ -148,6 +156,10 @@ private:
     int min_radius, max_radius;
 
     bool blob_enabled;
+
+    bool histogram_equalizer_enable, histogram_stretch_enable;
+
+    int STRETCHED, ORIGINAL;
 
     //    int bg_r, bg_g, bg_b, fg_r, fg_g, fg_b;
 
